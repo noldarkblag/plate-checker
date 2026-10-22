@@ -16,6 +16,9 @@ PLATE_PASSWORD = "Mmampongan"
 # Folder ID para sa CVA PDF Files
 CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
 
+# PANGALAN NG KUMPANYA (I-SET DITO PARA MADALING BAGUHIN)
+COMPANY_NAME = "FERNANDEZ MONITORING SYSTEM" 
+
 def convert_drive_url(url):
     if pd.isna(url) or not isinstance(url, str):
         return None
@@ -87,7 +90,7 @@ def display_vehicle_details(row, search_term=""):
             pdf_search_url = f"https://drive.google.com/drive/folders/{CVA_FOLDER_ID}?q={encoded_query}"
             st.link_button(f"📄 Open {term}.pdf", pdf_search_url)
 
-st.set_page_config(page_title="Plate Number Search", layout="wide")
+st.set_page_config(page_title=f"{COMPANY_NAME} - Vehicle Search", layout="wide")
 
 # Session States
 if "logged_in" not in st.session_state:
@@ -142,9 +145,10 @@ try:
 
     # --- LOGIN SCREEN ---
     if not st.session_state["logged_in"]:
-        st.title("🔒 System Login")
+        # MGA PAGBABAGO SA LOGIN PAGE HEADER:
+        st.title(f"🏢 {COMPANY_NAME}")
+        st.subheader("🔒 System Login")
         
-        # Inayos ang columns sa [1, 3] para pumiit ang laki ng input boxes sa tapat ng red line
         login_col1, login_col2 = st.columns([1, 3])
         
         with login_col1:
@@ -179,6 +183,7 @@ try:
     # --- MAIN SYSTEM SCREEN ---
     else:
         with st.sidebar:
+            st.markdown(f"### 🏢 {COMPANY_NAME}")
             st.write(f"👤 Logged in User: **{st.session_state['current_user']}**")
             
             if st.button("🚪 Logout"):
@@ -196,7 +201,9 @@ try:
             else:
                 st.caption("No activities recorded yet.")
 
+        # MGA PAGBABAGO SA MAIN PAGE HEADER:
         st.title("🚗 Live Vehicle Record System")
+        st.caption(f"Powered by **{COMPANY_NAME}**")
 
         if not st.session_state["is_admin"]:
             user_plate = st.session_state["current_user"]
