@@ -6,10 +6,13 @@ import urllib.parse
 
 # --- GOOGLE SHEET CONFIGURATION ---
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
-DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Fixed Password para sa Plate Numbers at Admin Accounts
-FIXED_PASSWORD = "Mmampongan"
+# URLs para sa iba't ibang tabs sa Google Sheet
+DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
+USERS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=users"
+
+# Fixed Password para sa Plate Number/Conduction Number logins
+PLATE_PASSWORD = "Mmampongan"
 
 # Folder ID para sa CVA PDF Files
 CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
@@ -23,7 +26,6 @@ def convert_drive_url(url):
         return f"https://drive.google.com/uc?export=view&id={file_id}"
     return url
 
-# Function para ipakita ang vehicle details card
 def display_vehicle_details(row, search_term=""):
     plate_num = row.get('Plate Number', 'N/A')
     
@@ -114,6 +116,20 @@ def load_data():
     df.columns = df.columns.str.strip()
     return df
 
+@st.cache_data(ttl=5)
+def load_admin_users():
+    try:
+        users_df = pd.read_csv(USERS_URL)
+        users_df.columns = users_df.columns.str.strip()
+        # I-convert sa Dictionary (Case-insensitive comparison para sa Username at Password)
+        credentials = dict(zip(
+            users_df['Username'].astype(str).str.strip(), 
+            users_df['Password'].astype(str).str.strip()
+        ))
+        return credentials
+    except Exception:
+        return {}
+
 try:
     df = load_data()
 
@@ -126,9 +142,6 @@ try:
     else:
         valid_plate_users = valid_plates
 
-    # General / Admin accounts na may access sa Search Bar
-    admin_accounts = {"ADMIN", "OFFICE"}
-
     # --- LOGIN SCREEN ---
     if not st.session_state["logged_in"]:
         st.title("🔒 System Login")
@@ -136,26 +149,28 @@ try:
         login_col1, login_col2 = st.columns([1, 2])
         
         with login_col1:
-            username_input = st.text_input("Username (Plate No. or Admin):").strip().upper()
+            username_input = st.text_input("Username (Plate No. or Admin):").strip()
             password_input = st.text_input("Password:", type="password").strip()
             login_btn = st.button("Login")
 
             if login_btn:
-                # 1. Admin Login
-                if username_input in admin_accounts and password_input == FIXED_PASSWORD:
+                admin_credentials = load_admin_users()
+                
+                # 1. Check kung nasa 'users' sheet ang account (Admin Access)
+                if username_input in admin_credentials and admin_credentials[username_input] == password_input:
                     st.session_state["logged_in"] = True
                     st.session_state["current_user"] = username_input
                     st.session_state["is_admin"] = True
-                    log_activity(username_input, "LOGIN", "Admin/Office logged into the system")
+                    log_activity(username_input, "LOGIN", "Admin logged into the system")
                     st.success("Login Successful!")
                     st.rerun()
 
-                # 2. Specific Plate Number Login
-                elif username_input in valid_plate_users and password_input == FIXED_PASSWORD:
+                # 2. Check kung Plate/Conduction Number ang gamit (Direct Plate Access)
+                elif username_input.upper() in valid_plate_users and password_input == PLATE_PASSWORD:
                     st.session_state["logged_in"] = True
-                    st.session_state["current_user"] = username_input
+                    st.session_state["current_user"] = username_input.upper()
                     st.session_state["is_admin"] = False
-                    log_activity(username_input, "LOGIN", f"Plate user logged in for: {username_input}")
+                    log_activity(username_input, "LOGIN", f"Plate user logged in for: {username_input.upper()}")
                     st.success("Login Successful!")
                     st.rerun()
 
@@ -164,7 +179,6 @@ try:
 
     # --- MAIN SYSTEM SCREEN ---
     else:
-        # Sidebar with Logout & History Logs
         with st.sidebar:
             st.write(f"👤 Logged in User: **{st.session_state['current_user']}**")
             
