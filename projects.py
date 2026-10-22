@@ -6,7 +6,7 @@ import urllib.parse
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Ang Folder ID kung saan nakatago ang lahat ng PDF Files
+# Google Drive Folder ID for CVA PDF files
 CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
 
 def convert_drive_url(url):
@@ -19,7 +19,7 @@ def convert_drive_url(url):
     return url
 
 st.set_page_config(page_title="Plate Number Search", layout="wide")
-st.title("🚗 Live Plate Number Search System")
+st.title("🚗 Live Vehicle Record Search System")
 
 @st.cache_data(ttl=5)
 def load_data():
@@ -30,17 +30,40 @@ def load_data():
 try:
     df = load_data()
 
-    search_plate = st.text_input("I-type ang Plate Number (hal. DBO4993):").strip().upper()
+    # Search Bar Input (Plate Number or Conduction Number)
+    search_query = st.text_input("Enter Plate Number or Conduction Number:").strip().upper()
 
-    if search_plate:
-        result = df[df['Plate Number'].astype(str).str.strip().str.upper() == search_plate]
+    if search_query:
+        # Match Plate Number
+        plate_match = df['Plate Number'].astype(str).str.strip().str.upper() == search_query
+        
+        # Match Conduction Number Column
+        cond_col = [col for col in df.columns if 'CONDUCTION' in col.upper()]
+        if cond_col:
+            cond_match = df[cond_col[0]].astype(str).str.strip().str.upper() == search_query
+            result = df[plate_match | cond_match]
+        else:
+            result = df[plate_match]
         
         if not result.empty:
             row = result.iloc[0]
-            st.success(f"Nahanap ang record para sa Plate Number: **{search_plate}**")
             
-            if 'Accounted to' in row and pd.notna(row['Accounted to']):
-                st.info(f"👤 **Accounted to:** {row['Accounted to']}")
+            plate_num = row.get('Plate Number', 'N/A')
+            conduction_num = row.get(cond_col[0], 'N/A') if cond_col else 'N/A'
+            
+            st.success("Record Found!")
+            
+            # Header Details
+            info_col1, info_col2, info_col3 = st.columns(3)
+            with info_col1:
+                st.write(f"🚘 **Plate Number:** {plate_num}")
+            with info_col2:
+                st.write(f"🏷️ **Conduction No.:** {conduction_num}")
+            with info_col3:
+                if 'Accounted to' in row and pd.notna(row['Accounted to']):
+                    st.write(f"👤 **Accounted to:** {row['Accounted to']}")
+
+            st.divider()
 
             col1, col2, col3 = st.columns(3)
             
@@ -53,10 +76,10 @@ try:
                     try:
                         st.image(img_url, use_container_width=True)
                     except Exception:
-                        st.warning("Hindi ma-preview ang larawan.")
-                        st.link_button("👉 Buksan sa Drive", raw_link)
+                        st.warning("Image preview not available.")
+                        st.link_button("👉 Open in Drive", raw_link)
                 else:
-                    st.write("Walang available na litrato.")
+                    st.write("No image available.")
                     
             # Column D: OR 2026
             with col2:
@@ -67,26 +90,26 @@ try:
                     try:
                         st.image(or_url, use_container_width=True)
                     except Exception:
-                        st.warning("Hindi ma-preview ang larawan.")
-                        st.link_button("👉 Buksan sa Drive", raw_link_or)
+                        st.warning("Image preview not available.")
+                        st.link_button("👉 Open in Drive", raw_link_or)
                 else:
-                    st.write("Walang available na litrato.")
+                    st.write("No image available.")
                     
-            # Column E: Checklist / CVA (Direct PDF Search sa Folder)
+            # Column E: Checklist / CVA
             with col3:
                 st.subheader("Checklist / CVA")
-                # Direct na hahanapin ang PDF file na may pangalang [Plate Number] sa Drive Folder
-                encoded_query = urllib.parse.quote(f"{search_plate}")
+                search_term = plate_num if pd.notna(plate_num) and str(plate_num).strip() != '' else search_query
+                encoded_query = urllib.parse.quote(f"{search_term}")
                 pdf_search_url = f"https://drive.google.com/drive/folders/{CVA_FOLDER_ID}?q={encoded_query}"
                 
-                st.link_button(f"📄 Buksan ang {search_plate}.pdf", pdf_search_url)
+                st.link_button(f"📄 Open {search_term}.pdf", pdf_search_url)
 
         else:
-            st.error("Walang nahanap na Plate Number.")
+            st.error("No record found for the given Plate Number or Conduction Number.")
 
-    if st.button("🔄 Refresh Data mula sa Google Sheet"):
+    if st.button("🔄 Refresh Data from Google Sheet"):
         st.cache_data.clear()
         st.rerun()
 
 except Exception as e:
-    st.error(f"Nagka-error sa pagkuha ng data mula sa Google Sheet: {e}")
+    st.error(f"Error loading data from Google Sheet: {e}")
