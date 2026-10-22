@@ -6,10 +6,10 @@ import urllib.parse
 
 # --- GOOGLE SHEET CONFIGURATION ---
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
+DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# URLs para sa iba't ibang tabs ng Google Sheet
-DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
-USERS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Users"
+# Ang Iisang Password para sa Lahat
+FIXED_PASSWORD = "Mmampongan"
 
 # Folder ID para sa CVA PDF Files
 CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
@@ -25,7 +25,7 @@ def convert_drive_url(url):
 
 st.set_page_config(page_title="Plate Number Search", layout="wide")
 
-# Session States para sa Login at Activity Logs
+# Session States
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "current_user" not in st.session_state:
@@ -33,7 +33,7 @@ if "current_user" not in st.session_state:
 if "activity_logs" not in st.session_state:
     st.session_state["activity_logs"] = []
 
-# Function para mag-record ng Activity Logs
+# Log Activity Function
 def log_activity(username, action, details):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = {
@@ -44,71 +44,69 @@ def log_activity(username, action, details):
     }
     st.session_state["activity_logs"].append(log_entry)
 
-# Function para i-load ang Users mula sa Google Sheet
+# Load Data and Allowed Usernames (Plate Numbers)
 @st.cache_data(ttl=5)
-def load_users():
-    try:
-        users_df = pd.read_csv(USERS_URL)
-        users_df.columns = users_df.columns.str.strip()
-        # I-convert sa Dictionary
-        credentials = dict(zip(users_df['Username'].astype(str).str.strip(), users_df['Password'].astype(str).str.strip()))
-        return credentials
-    except Exception:
-        # Backup credentials sakaling hindi pa nase-set up ang Users tab
-        return {"admin": "admin123", "office": "pass2026"}
+def load_data():
+    df = pd.read_csv(DATA_URL)
+    df.columns = df.columns.str.strip()
+    return df
 
-# --- LOGIN SCREEN ---
-if not st.session_state["logged_in"]:
-    st.title("🔒 System Login")
+try:
+    df = load_data()
+
+    # Kukunin ang lahat ng Plate Numbers at Conduction Numbers sa Google Sheet bilang Valid Usernames
+    valid_plates = set(df['Plate Number'].dropna().astype(str).str.strip().str.upper())
     
-    login_col1, login_col2 = st.columns([1, 2])
-    
-    with login_col1:
-        username_input = st.text_input("Username:").strip()
-        password_input = st.text_input("Password:", type="password").strip()
-        login_btn = st.button("Login")
+    cond_col = [col for col in df.columns if 'CONDUCTION' in col.upper()]
+    if cond_col:
+        valid_conductions = set(df[cond_col[0]].dropna().astype(str).str.strip().str.upper())
+        valid_usernames = valid_plates.union(valid_conductions)
+    else:
+        valid_usernames = valid_plates
 
-        if login_btn:
-            user_credentials = load_users()
-            if username_input in user_credentials and user_credentials[username_input] == password_input:
-                st.session_state["logged_in"] = True
-                st.session_state["current_user"] = username_input
-                log_activity(username_input, "LOGIN", "User logged into the system")
-                st.success("Login Successful!")
-                st.rerun()
-            else:
-                st.error("Invalid Username or Password.")
-
-# --- MAIN SYSTEM SCREEN ---
-else:
-    # Sidebar for User Info & Activity History Logs
-    with st.sidebar:
-        st.write(f"👤 Logged in as: **{st.session_state['current_user']}**")
+    # --- LOGIN SCREEN ---
+    if not st.session_state["logged_in"]:
+        st.title("🔒 System Login")
         
-        if st.button("🚪 Logout"):
-            log_activity(st.session_state['current_user'], "LOGOUT", "User logged out")
-            st.session_state["logged_in"] = False
-            st.session_state["current_user"] = ""
-            st.rerun()
+        login_col1, login_col2 = st.columns([1, 2])
+        
+        with login_col1:
+            username_input = st.text_input("Username (Enter your Plate Number):").strip().upper()
+            password_input = st.text_input("Password:", type="password").strip()
+            login_btn = st.button("Login")
 
-        st.divider()
-        st.subheader("📋 Session Search History")
-        if st.session_state["activity_logs"]:
-            logs_df = pd.DataFrame(st.session_state["activity_logs"])
-            st.dataframe(logs_df[['Timestamp', 'Action', 'Details']], hide_index=True)
-        else:
-            st.caption("No activities recorded yet.")
+            if login_btn:
+                # I-veverify kung ang Username ay nasa Google Sheet at tama ang Password
+                if username_input in valid_usernames and password_input == FIXED_PASSWORD:
+                    st.session_state["logged_in"] = True
+                    st.session_state["current_user"] = username_input
+                    log_activity(username_input, "LOGIN", "User logged into the system")
+                    st.success("Login Successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid Plate Number Username or Password.")
 
-    st.title("🚗 Live Vehicle Record Search System")
+    # --- MAIN SYSTEM SCREEN ---
+    else:
+        # Sidebar with Logout & History Logs
+        with st.sidebar:
+            st.write(f"👤 Logged in Plate: **{st.session_state['current_user']}**")
+            
+            if st.button("🚪 Logout"):
+                log_activity(st.session_state['current_user'], "LOGOUT", "User logged out")
+                st.session_state["logged_in"] = False
+                st.session_state["current_user"] = ""
+                st.rerun()
 
-    @st.cache_data(ttl=5)
-    def load_data():
-        df = pd.read_csv(DATA_URL)
-        df.columns = df.columns.str.strip()
-        return df
+            st.divider()
+            st.subheader("📋 Session Search History")
+            if st.session_state["activity_logs"]:
+                logs_df = pd.DataFrame(st.session_state["activity_logs"])
+                st.dataframe(logs_df[['Timestamp', 'Action', 'Details']], hide_index=True)
+            else:
+                st.caption("No activities recorded yet.")
 
-    try:
-        df = load_data()
+        st.title("🚗 Live Vehicle Record Search System")
 
         search_col1, search_col2 = st.columns([1, 2])
         
@@ -118,7 +116,6 @@ else:
         if search_query:
             plate_match = df['Plate Number'].astype(str).str.strip().str.upper() == search_query
             
-            cond_col = [col for col in df.columns if 'CONDUCTION' in col.upper()]
             if cond_col:
                 cond_match = df[cond_col[0]].astype(str).str.strip().str.upper() == search_query
                 result = df[plate_match | cond_match]
@@ -130,7 +127,6 @@ else:
                 plate_num = row.get('Plate Number', 'N/A')
                 conduction_num = row.get(cond_col[0], 'N/A') if cond_col else 'N/A'
                 
-                # Magse-save ng Log kung sino at ano ang sinearch
                 log_activity(st.session_state['current_user'], "SEARCH", f"Searched for: {search_query} (Match: {plate_num})")
 
                 st.success("Record Found!")
@@ -197,5 +193,5 @@ else:
             st.cache_data.clear()
             st.rerun()
 
-    except Exception as e:
-        st.error(f"Error loading data from Google Sheet: {e}")
+except Exception as e:
+    st.error(f"Error loading data from Google Sheet: {e}")
