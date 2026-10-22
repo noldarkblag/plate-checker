@@ -6,7 +6,7 @@ import urllib.parse
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# Google Drive Folder ID for CVA PDF files
+# Google Drive Folder ID para sa CVA PDF files
 CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
 
 def convert_drive_url(url):
@@ -30,8 +30,11 @@ def load_data():
 try:
     df = load_data()
 
-    # Search Bar Input (Plate Number or Conduction Number)
-    search_query = st.text_input("Enter Plate Number or Conduction Number:").strip().upper()
+    # Gagamit ng columns para paliitin ang lapad ng search input box
+    search_col1, search_col2 = st.columns([1, 2])
+    
+    with search_col1:
+        search_query = st.text_input("Enter Plate Number or Conduction Number:").strip().upper()
 
     if search_query:
         # Match Plate Number
