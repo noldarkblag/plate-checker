@@ -1,9 +1,13 @@
 import streamlit as st
 import pandas as pd
 import re
+import urllib.parse
 
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
+
+# Ang Folder ID kung saan nakatago ang lahat ng PDF Files
+CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
 
 def convert_drive_url(url):
     if pd.isna(url) or not isinstance(url, str):
@@ -68,19 +72,15 @@ try:
                 else:
                     st.write("Walang available na litrato.")
                     
-            # Column E: Checklist / CVA
+            # Column E: Checklist / CVA (Direct PDF Search sa Folder)
             with col3:
                 st.subheader("Checklist / CVA")
-                cva_raw_link = str(row.get("Accountability and Checklist File's or CVA", "")).strip()
-                if cva_raw_link and cva_raw_link.lower() != 'nan':
-                    # Kung URL na ang nakalagay
-                    if cva_raw_link.startswith("http"):
-                        st.link_button("📄 Buksan ang CVA File", cva_raw_link)
-                    else:
-                        st.write(f"📁 File Name: **{cva_raw_link}**")
-                        st.caption("⚠️ Paki-palitan ang text sa Google Sheet ng buong Google Drive link ng PDF.")
-                else:
-                    st.write("Walang file.")
+                # Direct na hahanapin ang PDF file na may pangalang [Plate Number] sa Drive Folder
+                encoded_query = urllib.parse.quote(f"{search_plate}")
+                pdf_search_url = f"https://drive.google.com/drive/folders/{CVA_FOLDER_ID}?q={encoded_query}"
+                
+                st.link_button(f"📄 Buksan ang {search_plate}.pdf", pdf_search_url)
+
         else:
             st.error("Walang nahanap na Plate Number.")
 
