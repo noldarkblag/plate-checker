@@ -1,13 +1,9 @@
 import streamlit as st
 import pandas as pd
 import re
-import urllib.parse
 
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
 CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
-
-# Google Drive Folder ID para sa CVA PDF files
-CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
 
 def convert_drive_url(url):
     if pd.isna(url) or not isinstance(url, str):
@@ -30,7 +26,7 @@ def load_data():
 try:
     df = load_data()
 
-    # Gagamit ng columns para paliitin ang lapad ng search input box
+    # Search Box Width Adjustment
     search_col1, search_col2 = st.columns([1, 2])
     
     with search_col1:
@@ -98,14 +94,16 @@ try:
                 else:
                     st.write("No image available.")
                     
-            # Column E: Checklist / CVA
+            # Column E: Checklist / CVA (Direct Open File)
             with col3:
                 st.subheader("Checklist / CVA")
-                search_term = plate_num if pd.notna(plate_num) and str(plate_num).strip() != '' else search_query
-                encoded_query = urllib.parse.quote(f"{search_term}")
-                pdf_search_url = f"https://drive.google.com/drive/folders/{CVA_FOLDER_ID}?q={encoded_query}"
+                cva_link = str(row.get("Accountability and Checklist File's or CVA", "")).strip()
                 
-                st.link_button(f"📄 Open {search_term}.pdf", pdf_search_url)
+                if cva_link and cva_link.startswith("http"):
+                    # Direktang bubuksan ang eksaktong file link sa 1 click
+                    st.link_button(f"📄 Open {plate_num}.pdf", cva_link)
+                else:
+                    st.write("No PDF link specified in Google Sheet.")
 
         else:
             st.error("No record found for the given Plate Number or Conduction Number.")
