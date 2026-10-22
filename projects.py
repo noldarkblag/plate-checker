@@ -1,15 +1,18 @@
 import streamlit as st
 import pandas as pd
 import re
+from datetime import datetime
+import urllib.parse
 
+# --- GOOGLE SHEET CONFIGURATION ---
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
-CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# --- USER CREDENTIALS (Palitan mo ito ng gusto mong Username at Password) ---
-USER_CREDENTIALS = {
-    "admin": "admin123",
-    "office": "pass2026"
-}
+# URLs para sa iba't ibang tabs ng Google Sheet
+DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
+USERS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Users"
+
+# Folder ID para sa CVA PDF Files
+CVA_FOLDER_ID = "1ur4-5ItneFGrbaGYR90aLq-tkVYhlDYQ"
 
 def convert_drive_url(url):
     if pd.isna(url) or not isinstance(url, str):
@@ -22,9 +25,37 @@ def convert_drive_url(url):
 
 st.set_page_config(page_title="Plate Number Search", layout="wide")
 
-# Session State para sa Login Status
+# Session States para sa Login at Activity Logs
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+if "current_user" not in st.session_state:
+    st.session_state["current_user"] = ""
+if "activity_logs" not in st.session_state:
+    st.session_state["activity_logs"] = []
+
+# Function para mag-record ng Activity Logs
+def log_activity(username, action, details):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = {
+        "Timestamp": timestamp,
+        "Username": username,
+        "Action": action,
+        "Details": details
+    }
+    st.session_state["activity_logs"].append(log_entry)
+
+# Function para i-load ang Users mula sa Google Sheet
+@st.cache_data(ttl=5)
+def load_users():
+    try:
+        users_df = pd.read_csv(USERS_URL)
+        users_df.columns = users_df.columns.str.strip()
+        # I-convert sa Dictionary
+        credentials = dict(zip(users_df['Username'].astype(str).str.strip(), users_df['Password'].astype(str).str.strip()))
+        return credentials
+    except Exception:
+        # Backup credentials sakaling hindi pa nase-set up ang Users tab
+        return {"admin": "admin123", "office": "pass2026"}
 
 # --- LOGIN SCREEN ---
 if not st.session_state["logged_in"]:
@@ -33,32 +64,46 @@ if not st.session_state["logged_in"]:
     login_col1, login_col2 = st.columns([1, 2])
     
     with login_col1:
-        username_input = st.text_input("Username:")
-        password_input = st.text_input("Password:", type="password")
+        username_input = st.text_input("Username:").strip()
+        password_input = st.text_input("Password:", type="password").strip()
         login_btn = st.button("Login")
 
         if login_btn:
-            if username_input in USER_CREDENTIALS and USER_CREDENTIALS[username_input] == password_input:
+            user_credentials = load_users()
+            if username_input in user_credentials and user_credentials[username_input] == password_input:
                 st.session_state["logged_in"] = True
+                st.session_state["current_user"] = username_input
+                log_activity(username_input, "LOGIN", "User logged into the system")
                 st.success("Login Successful!")
                 st.rerun()
             else:
                 st.error("Invalid Username or Password.")
 
-# --- SEARCH SYSTEM SCREEN (Lalabas lang kapag Logged In na) ---
+# --- MAIN SYSTEM SCREEN ---
 else:
-    # Sidebar Logout Button
+    # Sidebar for User Info & Activity History Logs
     with st.sidebar:
-        st.write(f"Logged in as: **User**")
+        st.write(f"👤 Logged in as: **{st.session_state['current_user']}**")
+        
         if st.button("🚪 Logout"):
+            log_activity(st.session_state['current_user'], "LOGOUT", "User logged out")
             st.session_state["logged_in"] = False
+            st.session_state["current_user"] = ""
             st.rerun()
+
+        st.divider()
+        st.subheader("📋 Session Search History")
+        if st.session_state["activity_logs"]:
+            logs_df = pd.DataFrame(st.session_state["activity_logs"])
+            st.dataframe(logs_df[['Timestamp', 'Action', 'Details']], hide_index=True)
+        else:
+            st.caption("No activities recorded yet.")
 
     st.title("🚗 Live Vehicle Record Search System")
 
     @st.cache_data(ttl=5)
     def load_data():
-        df = pd.read_csv(CSV_URL)
+        df = pd.read_csv(DATA_URL)
         df.columns = df.columns.str.strip()
         return df
 
@@ -82,10 +127,12 @@ else:
             
             if not result.empty:
                 row = result.iloc[0]
-                
                 plate_num = row.get('Plate Number', 'N/A')
                 conduction_num = row.get(cond_col[0], 'N/A') if cond_col else 'N/A'
                 
+                # Magse-save ng Log kung sino at ano ang sinearch
+                log_activity(st.session_state['current_user'], "SEARCH", f"Searched for: {search_query} (Match: {plate_num})")
+
                 st.success("Record Found!")
                 
                 info_col1, info_col2, info_col3 = st.columns(3)
@@ -137,9 +184,13 @@ else:
                     if cva_link and cva_link.startswith("http"):
                         st.link_button(f"📄 Open {plate_num}.pdf", cva_link)
                     else:
-                        st.write("No PDF link specified in Google Sheet.")
+                        search_term = plate_num if pd.notna(plate_num) and str(plate_num).strip() != '' else search_query
+                        encoded_query = urllib.parse.quote(f"{search_term}")
+                        pdf_search_url = f"https://drive.google.com/drive/folders/{CVA_FOLDER_ID}?q={encoded_query}"
+                        st.link_button(f"📄 Open {search_term}.pdf", pdf_search_url)
 
             else:
+                log_activity(st.session_state['current_user'], "SEARCH_FAILED", f"No record found for: {search_query}")
                 st.error("No record found for the given Plate Number or Conduction Number.")
 
         if st.button("🔄 Refresh Data from Google Sheet"):
