@@ -7,7 +7,6 @@ import urllib.parse
 # --- GOOGLE SHEET CONFIGURATION ---
 SHEET_ID = "1Rs4Emg2TPd373AnMfTtVVdoIE8n3YHRPB_6_ksXei8M"
 
-# URLs para sa iba't ibang tabs sa Google Sheet
 DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 USERS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=users"
 
@@ -121,7 +120,6 @@ def load_admin_users():
     try:
         users_df = pd.read_csv(USERS_URL)
         users_df.columns = users_df.columns.str.strip()
-        # I-convert sa Dictionary (Case-insensitive comparison para sa Username at Password)
         credentials = dict(zip(
             users_df['Username'].astype(str).str.strip(), 
             users_df['Password'].astype(str).str.strip()
@@ -146,7 +144,8 @@ try:
     if not st.session_state["logged_in"]:
         st.title("🔒 System Login")
         
-        login_col1, login_col2 = st.columns([1, 2])
+        # Inayos ang columns sa [1, 3] para pumiit ang laki ng input boxes sa tapat ng red line
+        login_col1, login_col2 = st.columns([1, 3])
         
         with login_col1:
             username_input = st.text_input("Username (Plate No. or Admin):").strip()
@@ -156,7 +155,7 @@ try:
             if login_btn:
                 admin_credentials = load_admin_users()
                 
-                # 1. Check kung nasa 'users' sheet ang account (Admin Access)
+                # 1. Admin/Custom User check mula sa 'users' sheet
                 if username_input in admin_credentials and admin_credentials[username_input] == password_input:
                     st.session_state["logged_in"] = True
                     st.session_state["current_user"] = username_input
@@ -165,7 +164,7 @@ try:
                     st.success("Login Successful!")
                     st.rerun()
 
-                # 2. Check kung Plate/Conduction Number ang gamit (Direct Plate Access)
+                # 2. Direct Plate Number check
                 elif username_input.upper() in valid_plate_users and password_input == PLATE_PASSWORD:
                     st.session_state["logged_in"] = True
                     st.session_state["current_user"] = username_input.upper()
@@ -199,7 +198,6 @@ try:
 
         st.title("🚗 Live Vehicle Record System")
 
-        # CASE 1: PLATE NUMBER LOGIN (Awtomatikong lalabas ang sariling details, walang Search Bar)
         if not st.session_state["is_admin"]:
             user_plate = st.session_state["current_user"]
             
@@ -216,7 +214,6 @@ try:
             else:
                 st.error("Record details not found.")
 
-        # CASE 2: ADMIN / OFFICE LOGIN (May Search Bar)
         else:
             search_col1, search_col2 = st.columns([1, 2])
             
